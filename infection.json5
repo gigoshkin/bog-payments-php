@@ -1,0 +1,44 @@
+{
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    "source": {
+        "directories": ["src"],
+        "excludes": [
+            // Pure data bags — no logic to meaningfully mutate
+            "Enum",
+            "Exception",
+            "Dto/Response",
+            "Dto/Request/BasketItem.php",
+            "Dto/Request/SplitTransfer.php",
+            "Dto/Request/SubscribeRequest.php"
+        ]
+    },
+    "logs": {
+        "text":           "infection.log",
+        "html":           "infection.html",
+        "json":           "infection-report.json",
+        "perMutator":     "per-mutator.md",
+        "summaryJson":    "infection-summary.json"
+    },
+    "mutators": {
+        "@default": true,
+        // Disable mutators that produce noise without signal on I/O-glue code
+        "CastString":    false,
+        "CastArray":     false,
+        "CastBool":      false,
+        "CastFloat":     false,
+        "CastInt":       false,
+        // Honour @infection-ignore-all comments in source: skip any mutation whose
+        // diff contains the annotation string (both original and mutated lines are
+        // included in the diff, so a comment on the original line always matches).
+        // DiffSourceCodeMatcher wraps user patterns as: ^-\s*{pattern}$
+        // Use .*@infection-ignore-all.* so the annotation is matched anywhere on the removed line.
+        "global-ignoreSourceCodeByRegex": [".*@infection-ignore-all.*"]
+    },
+    "minMsi":             85,
+    "minCoveredMsi":      95,
+    "testFramework":        "phpunit",
+    "testFrameworkOptions": "--testsuite=unit,integration",
+    "phpUnit": {
+        "configDir": "."
+    }
+}

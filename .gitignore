@@ -1,0 +1,18 @@
+/vendor/
+/build/
+/coverage.xml
+
+# Infection artefacts
+infection.log
+infection.html
+infection-report.json
+infection-summary.json
+per-mutator.md
+
+# PHPUnit cache
+.phpunit.result.cache
+
+# IDE
+.idea/
+.vscode/
+*.swp
