@@ -1,5 +1,5 @@
 {
-    "name": "bog/payments",
+    "name": "gigoshkin/bog-payments-php",
     "description": "Bank of Georgia Payments API client library for PHP 8.1+",
     "type": "library",
     "license": "MIT",

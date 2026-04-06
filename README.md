@@ -22,7 +22,7 @@ A standalone, framework-agnostic PHP 8.1+ client for the [Bank of Georgia Paymen
 ## Installation
 
 ```bash
-composer require bog/payments
+composer require gigoshkin/bog-payments-php
 ```
 
 You also need a concrete HTTP client (not included to keep the library decoupled):
