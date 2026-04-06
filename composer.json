@@ -1,10 +1,10 @@
 {
     "name": "gigoshkin/bog-payments-php",
-    "description": "Bank of Georgia Payments API client library for PHP 8.1+",
+    "description": "Bank of Georgia Payments API client library for PHP 8.2+",
     "type": "library",
     "license": "MIT",
     "require": {
-        "php": "^8.1",
+        "php": "^8.2",
         "ext-openssl": "*",
         "ext-json": "*",
         "psr/http-client": "^1.0",
@@ -31,6 +31,9 @@
     "config": {
         "sort-packages": true,
         "optimize-autoloader": true,
+        "platform": {
+            "php": "8.2.0"
+        },
         "allow-plugins": {
             "infection/extension-installer": true
         }

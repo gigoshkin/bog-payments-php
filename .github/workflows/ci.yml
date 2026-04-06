@@ -19,7 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        # PHPUnit 11 requires PHP 8.2+; library still declares ^8.1 in composer.json
         php: ["8.2", "8.3", "8.4"]
 
     steps:
@@ -46,7 +45,7 @@ jobs:
             ${{ runner.os }}-php-${{ matrix.php }}-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-interaction --ignore-platform-reqs
+        run: composer install --prefer-dist --no-progress --no-interaction
 
       - name: Run tests
         run: php vendor/bin/phpunit --testdox
