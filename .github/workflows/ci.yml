@@ -122,7 +122,7 @@ jobs:
       - name: Run Infection
         run: php vendor/bin/infection --coverage=build --no-progress --threads=4
         env:
-          INFECTION_BADGE_API_KEY: ${{ secrets.INFECTION_BADGE_API_KEY }}
+          STRYKER_DASHBOARD_API_KEY: ${{ secrets.STRYKER_DASHBOARD_API_KEY }}
 
   static-analysis:
     name: Static Analysis
