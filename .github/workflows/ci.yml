@@ -19,7 +19,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        php: ["8.1", "8.2", "8.3", "8.4"]
+        # PHPUnit 11 requires PHP 8.2+; library still declares ^8.1 in composer.json
+        php: ["8.2", "8.3", "8.4"]
 
     steps:
       - name: Checkout
@@ -30,7 +31,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: openssl, json
-          coverage: xdebug
+          coverage: none
           tools: composer:v2
 
       - name: Validate composer.json
@@ -62,7 +63,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.3"
+          php-version: "8.4"
           extensions: openssl, json
           coverage: xdebug
           tools: composer:v2
@@ -71,9 +72,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor
-          key: ${{ runner.os }}-php-8.3-${{ hashFiles('composer.lock') }}
+          key: ${{ runner.os }}-php-8.4-${{ hashFiles('composer.lock') }}
           restore-keys: |
-            ${{ runner.os }}-php-8.3-
+            ${{ runner.os }}-php-8.4-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-interaction
@@ -134,7 +135,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.3"
+          php-version: "8.4"
           extensions: openssl, json
           tools: composer:v2
 
@@ -142,15 +143,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor
-          key: ${{ runner.os }}-php-8.3-${{ hashFiles('composer.lock') }}
+          key: ${{ runner.os }}-php-8.4-${{ hashFiles('composer.lock') }}
           restore-keys: |
-            ${{ runner.os }}-php-8.3-
+            ${{ runner.os }}-php-8.4-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-interaction
-
-      - name: Install PHPStan
-        run: composer require --dev phpstan/phpstan --no-interaction
 
       - name: Run PHPStan
         run: php vendor/bin/phpstan analyse src --level=8 --no-progress
