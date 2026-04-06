@@ -5,6 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![PHPUnit](https://img.shields.io/badge/tested%20with-PHPUnit%2011-brightgreen)](https://phpunit.de)
 [![PSR-18](https://img.shields.io/badge/PSR-18%20compatible-blue)](https://www.php-fig.org/psr/psr-18/)
+[![codecov](https://codecov.io/github/gigoshkin/bog-payments-php/graph/badge.svg?token=QVZ8N7J23J)](https://codecov.io/github/gigoshkin/bog-payments-php)
+[![Mutation testing badge](https://img.shields.io/endpoint?style=flat&url=https%3A%2F%2Fbadge-api.stryker-mutator.io%2Fgithub.com%2Fgigoshkin%2Fbog-payments-php%2Fmain)](https://dashboard.stryker-mutator.io/reports/github.com/gigoshkin/bog-payments-php/main)
 
 A standalone, framework-agnostic PHP 8.1+ client for the [Bank of Georgia Payments API](https://api.bog.ge/docs/en/payments/introduction). Zero framework coupling in production — drop it into Symfony, Laravel, or any PSR-compatible project by injecting standard interfaces.
 
