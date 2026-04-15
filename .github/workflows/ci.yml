@@ -47,8 +47,11 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-interaction
 
+      - name: Security audit
+        run: composer audit
+
       - name: Run tests
-        run: php vendor/bin/phpunit --testdox
+        run: php vendor/bin/phpunit --testsuite unit,integration --testdox
 
   coverage:
     name: Coverage
@@ -79,7 +82,7 @@ jobs:
         run: composer install --prefer-dist --no-progress --no-interaction
 
       - name: Generate coverage report
-        run: php vendor/bin/phpunit --coverage-clover coverage.xml
+        run: php vendor/bin/phpunit --testsuite unit,integration --coverage-clover coverage.xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -116,7 +119,7 @@ jobs:
         run: composer install --prefer-dist --no-progress --no-interaction
 
       - name: Generate coverage for Infection
-        run: php -d pcov.enabled=1 -d pcov.directory=. vendor/bin/phpunit --coverage-xml=build/coverage --log-junit=build/junit.xml
+        run: php -d pcov.enabled=1 -d pcov.directory=. vendor/bin/phpunit --testsuite unit,integration --coverage-xml=build/coverage --log-junit=build/junit.xml
 
       - name: Run Infection
         run: php vendor/bin/infection --coverage=build --no-progress --threads=4

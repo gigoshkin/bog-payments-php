@@ -100,7 +100,7 @@ final class CreateOrderFlowTest extends TestCase
 
         self::assertSame('https://example.com/cb', $body['callback_url']);
         self::assertSame(99.99, $body['purchase_units']['total_amount']);
-        self::assertSame('USD', $body['currency']);
+        self::assertSame('USD', $body['purchase_units']['currency']);
         self::assertSame('manual', $body['capture']);
         self::assertSame('EXT-001', $body['external_order_id']);
         self::assertSame(60, $body['ttl']);
@@ -118,37 +118,41 @@ final class CreateOrderFlowTest extends TestCase
             'expires_in'   => 3600,
         ])));
         $mock->addResponse(new Response(200, [], json_encode([
-            'id'             => 'ord-42',
-            'status'         => 'completed',
+            'order_id'          => 'ord-42',
+            'order_status'      => ['key' => 'completed', 'value' => 'დასრულებული'],
             'external_order_id' => 'EXT-42',
-            'capture'        => 'automatic',
-            'purchase_units' => [
-                'currency'         => 'GEL',
-                'requested_amount' => 100.0,
-                'processed_amount' => 100.0,
-                'refunded_amount'  => 0.0,
-                'basket'           => [],
+            'capture'           => 'automatic',
+            'purchase_units'    => [
+                'currency_code'   => 'GEL',
+                'request_amount'  => '100.0',
+                'transfer_amount' => '100.0',
+                'refund_amount'   => '0.0',
+                'items'           => [],
             ],
-            'payment_method' => [
-                'method'         => 'card',
-                'transaction_id' => 'txn-001',
-                'masked_id'      => '411111******1111',
+            'payment_detail'    => [
+                'transfer_method' => ['key' => 'card', 'value' => 'ბარათით გადახდა'],
+                'transaction_id'  => 'txn-001',
+                'payer_identifier' => '411111xxxxxx1111',
             ],
-            'buyer'          => [
+            'buyer'             => [
                 'full_name'    => 'Jane Doe',
                 'email'        => 'jane@example.com',
                 'phone_number' => '+995599000000',
             ],
-            'actions'        => [
+            'actions'           => [
                 [
-                    'type'      => 'capture',
-                    'amount'    => 100.0,
-                    'status'    => 'completed',
-                    'timestamp' => '2026-04-06T10:05:00Z',
+                    'action_id'         => 'act-1',
+                    'action'            => 'authorize',
+                    'request_channel'   => 'public_api',
+                    'amount'            => '100.0',
+                    'status'            => 'completed',
+                    'zoned_action_date' => '2026-04-06T10:05:00Z',
+                    'code'              => null,
+                    'code_description'  => null,
                 ],
             ],
-            'created_at'     => '2026-04-06T10:00:00Z',
-            'expires_at'     => '2026-04-06T10:15:00Z',
+            'zoned_create_date' => '2026-04-06T10:00:00Z',
+            'zoned_expire_date' => '2026-04-06T10:15:00Z',
         ])));
 
         $client  = $this->makeClient($mock);
@@ -159,9 +163,9 @@ final class CreateOrderFlowTest extends TestCase
         self::assertSame(\Bog\Payments\Enum\Currency::GEL, $details->currency);
         self::assertSame(100.0, $details->requestedAmount);
         self::assertSame('jane@example.com', $details->buyerEmail);
-        self::assertSame('411111******1111', $details->maskedCard);
+        self::assertSame('411111xxxxxx1111', $details->maskedCard);
         self::assertSame(\Bog\Payments\Enum\PaymentMethod::Card, $details->paymentMethod);
         self::assertCount(1, $details->actions);
-        self::assertSame(\Bog\Payments\Enum\ActionType::Capture, $details->actions[0]->type);
+        self::assertSame(\Bog\Payments\Enum\ActionType::Authorize, $details->actions[0]->type);
     }
 }

@@ -12,7 +12,7 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 
-final class OAuthTokenProvider implements TokenProviderInterface, TokenFetcherInterface
+final readonly class OAuthTokenProvider implements TokenProviderInterface, TokenFetcherInterface
 {
     public function __construct(
         private readonly BogConfig              $config,

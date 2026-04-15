@@ -1,4 +1,5 @@
 /vendor/
+.env.sandbox
 /build/
 /coverage.xml
 
@@ -16,3 +17,4 @@ per-mutator.md
 .idea/
 .vscode/
 *.swp
+/inspect/

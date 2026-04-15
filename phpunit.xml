@@ -13,6 +13,13 @@
         <testsuite name="integration">
             <directory>tests/Integration</directory>
         </testsuite>
+        <testsuite name="sandbox">
+            <directory>tests/Sandbox</directory>
+            <exclude>tests/Sandbox/InteractiveFlowTest.php</exclude>
+        </testsuite>
+        <testsuite name="sandbox-interactive">
+            <file>tests/Sandbox/InteractiveFlowTest.php</file>
+        </testsuite>
     </testsuites>
 
     <source>

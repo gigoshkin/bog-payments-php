@@ -13,9 +13,9 @@ use Bog\Payments\Exception\WebhookVerificationException;
  * body before deserializing or processing any fields. BOG signs the exact
  * byte sequence of the body and field order must not be altered.
  */
-final class WebhookVerifier
+final readonly class WebhookVerifier
 {
-    private readonly \OpenSSLAsymmetricKey $publicKey;
+    private \OpenSSLAsymmetricKey $publicKey;
 
     /**
      * @param string $publicKeyPem PEM-encoded RSA public key provided by BOG.

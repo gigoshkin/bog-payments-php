@@ -9,6 +9,8 @@ use Bog\Payments\Auth\OAuthTokenProvider;
 use Bog\Payments\Auth\TokenProviderInterface;
 use Bog\Payments\Cache\CacheInterface;
 use Bog\Payments\Cache\InMemoryCache;
+use Bog\Payments\Dto\Request\CancelPreAuthRequest;
+use Bog\Payments\Dto\Request\ConfirmPreAuthRequest;
 use Bog\Payments\Dto\Request\CreateOrderRequest;
 use Bog\Payments\Dto\Request\RefundRequest;
 use Bog\Payments\Dto\Request\SubscribeRequest;
@@ -30,7 +32,7 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 
-final class BogClient
+final readonly class BogClient
 {
     public function __construct(
         private readonly BogConfig               $config,
@@ -113,7 +115,17 @@ final class BogClient
         $url   = $this->config->baseUrl . '/payments/v1/receipt/' . rawurlencode($orderId);
 
         $psrRequest = $this->requestBuilder->plain('GET', $url, $token);
-        $data       = $this->send($psrRequest, $orderId);
+
+        try {
+            $data = $this->send($psrRequest, $orderId);
+        } catch (ApiException $e) {
+            // BOG returns 400 "Invalid order_id" for orders that don't exist in their system,
+            // rather than 404. Normalise this to OrderNotFoundException for callers.
+            if ($e->statusCode === 400 && stripos($e->responseBody, 'order_id') !== false) {
+                throw new OrderNotFoundException(sprintf('BOG order "%s" not found.', $orderId), 0, $e);
+            }
+            throw $e;
+        }
 
         return OrderDetails::fromArray($data);
     }
@@ -148,11 +160,64 @@ final class BogClient
     }
 
     // -------------------------------------------------------------------------
+    // Pre-authorization
+    // -------------------------------------------------------------------------
+
+    /**
+     * Confirm a pre-authorized payment, fully or partially.
+     *
+     * Pass null amount to confirm the full pre-authorized amount.
+     * Pass a partial amount for partial confirmation.
+     *
+     * @throws AuthenticationException
+     * @throws OrderNotFoundException
+     * @throws ApiException
+     * @throws NetworkException
+     */
+    public function confirmPreAuthorization(
+        string               $orderId,
+        ConfirmPreAuthRequest $request,
+        ?string              $idempotencyKey = null,
+    ): RefundResponse {
+        $key   = $idempotencyKey ?? $this->idempotencyKeyGen->generate();
+        $token = $this->resolveToken();
+        $url   = $this->config->baseUrl . '/payments/v1/payment/authorization/approve/' . rawurlencode($orderId);
+
+        $psrRequest = $this->requestBuilder->json('POST', $url, $token, $request->toArray(), $key);
+        $data       = $this->send($psrRequest, $orderId);
+
+        return RefundResponse::fromArray($data);
+    }
+
+    /**
+     * Cancel (reject) a pre-authorized payment.
+     *
+     * @throws AuthenticationException
+     * @throws OrderNotFoundException
+     * @throws ApiException
+     * @throws NetworkException
+     */
+    public function cancelPreAuthorization(
+        string              $orderId,
+        CancelPreAuthRequest $request,
+        ?string             $idempotencyKey = null,
+    ): RefundResponse {
+        $key   = $idempotencyKey ?? $this->idempotencyKeyGen->generate();
+        $token = $this->resolveToken();
+        $url   = $this->config->baseUrl . '/payments/v1/payment/authorization/cancel/' . rawurlencode($orderId);
+
+        $psrRequest = $this->requestBuilder->json('POST', $url, $token, $request->toArray(), $key);
+        $data       = $this->send($psrRequest, $orderId);
+
+        return RefundResponse::fromArray($data);
+    }
+
+    // -------------------------------------------------------------------------
     // Recurring / Saved cards
     // -------------------------------------------------------------------------
 
     /**
-     * Save the card used in an existing order for future recurring charges.
+     * Save the card used in an existing order for future user-initiated (recurring) charges.
      * The order must have been completed successfully.
      *
      * @throws AuthenticationException
@@ -168,6 +233,26 @@ final class BogClient
 
         $psrRequest = $this->requestBuilder->plain('PUT', $url, $token, $key);
         $this->send($psrRequest, $orderId, expectBody: false); // @infection-ignore-all — true is equivalent: status 202 + empty body returns [] via other conditions
+    }
+
+    /**
+     * Save the card used in an existing order for future automatic (offline) charges.
+     * Call this BEFORE redirecting the customer to the payment page.
+     * Upon successful payment, the card is linked to this order ID for future chargeCard() calls.
+     *
+     * @throws AuthenticationException
+     * @throws OrderNotFoundException
+     * @throws ApiException
+     * @throws NetworkException
+     */
+    public function saveCardAutomatic(string $orderId, ?string $idempotencyKey = null): void
+    {
+        $key   = $idempotencyKey ?? $this->idempotencyKeyGen->generate();
+        $token = $this->resolveToken();
+        $url   = $this->config->baseUrl . '/payments/v1/orders/' . rawurlencode($orderId) . '/subscriptions';
+
+        $psrRequest = $this->requestBuilder->plain('PUT', $url, $token, $key);
+        $this->send($psrRequest, $orderId, expectBody: false); // @infection-ignore-all
     }
 
     /**
@@ -188,7 +273,69 @@ final class BogClient
     }
 
     /**
-     * Charge a saved card from a previous order.
+     * Create a new order using a saved card (user-present / recurring flow).
+     * The customer will be redirected to BOG's payment page to authenticate.
+     *
+     * @throws AuthenticationException
+     * @throws OrderNotFoundException
+     * @throws ApiException
+     * @throws NetworkException
+     */
+    public function createRecurrentOrder(
+        string             $parentOrderId,
+        CreateOrderRequest $request,
+        ?string            $idempotencyKey = null,
+    ): CreateOrderResponse {
+        $key   = $idempotencyKey ?? $this->idempotencyKeyGen->generate();
+        $token = $this->resolveToken();
+        $url   = $this->config->baseUrl
+            . '/payments/v1/ecommerce/orders/'
+            . rawurlencode($parentOrderId);
+
+        $psrRequest = $this->requestBuilder->json('POST', $url, $token, $request->toArray(), $key);
+        $data       = $this->send($psrRequest, $parentOrderId);
+
+        return CreateOrderResponse::fromArray($data);
+    }
+
+    /**
+     * Complete an Apple Pay payment initiated on the merchant's own webpage.
+     *
+     * Flow:
+     *   1. Create an order with ExternalApplePayConfig — response contains $acceptUrl.
+     *   2. Call this method with that order ID and the apple_pay_token from the Apple Pay JS SDK.
+     *   3. Check the returned response: if status is 'completed', payment succeeded.
+     *      If a redirectUrl is present, redirect the customer there for 3DS.
+     *
+     * @see https://api.bog.ge/docs/en/payments/external-orders/complete-external-applepay
+     *
+     * @throws AuthenticationException
+     * @throws OrderNotFoundException
+     * @throws ApiException
+     * @throws NetworkException
+     */
+    public function completeApplePayPayment(
+        string  $orderId,
+        string  $applePayToken,
+        ?string $idempotencyKey = null,
+    ): CreateOrderResponse {
+        $key   = $idempotencyKey ?? $this->idempotencyKeyGen->generate();
+        $token = $this->resolveToken();
+        $url   = $this->config->baseUrl
+            . '/payments/v1/ecommerce/orders/'
+            . rawurlencode($orderId)
+            . '/payment';
+
+        $psrRequest = $this->requestBuilder->json('POST', $url, $token, [
+            'apple_pay_token' => $applePayToken,
+        ], $key);
+        $data = $this->send($psrRequest, $orderId);
+
+        return CreateOrderResponse::fromArray($data);
+    }
+
+    /**
+     * Automatically charge a saved card without customer interaction (offline flow).
      *
      * IMPORTANT: If you need to retry a failed charge call, you MUST supply the
      * same idempotency key you used originally. Auto-generation on each call
@@ -339,7 +486,7 @@ final class BogClient
             );
         }
 
-        if (!$expectBody || $rawBody === '' || $status === 202 || $status === 204) { // @infection-ignore-all — LogicalOr/±1 variants are equivalent: multiple overlapping early-return conditions
+        if (!$expectBody || $rawBody === '' || $status === 204) { // @infection-ignore-all — LogicalOr/±1 variants are equivalent: multiple overlapping early-return conditions
             return [];
         }
 

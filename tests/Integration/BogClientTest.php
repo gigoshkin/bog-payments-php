@@ -193,16 +193,16 @@ final class BogClientTest extends TestCase
             '_links' => ['redirect' => ['href' => 'https://p.bog.ge/']],
         ])));
         $mock->addResponse(new Response(200, [], json_encode([
-            'id'             => 'ord-1',
-            'status'         => 'completed',
-            'purchase_units' => [
-                'currency'         => 'GEL',
-                'requested_amount' => 100.0,
-                'processed_amount' => 100.0,
-                'refunded_amount'  => 0.0,
+            'order_id'          => 'ord-1',
+            'order_status'      => ['key' => 'completed', 'value' => 'დასრულებული'],
+            'purchase_units'    => [
+                'currency_code'   => 'GEL',
+                'request_amount'  => '100.0',
+                'transfer_amount' => '100.0',
+                'refund_amount'   => '0.0',
             ],
-            'created_at' => '2026-04-06T10:00:00Z',
-            'expires_at' => '2026-04-06T10:15:00Z',
+            'zoned_create_date' => '2026-04-06T10:00:00Z',
+            'zoned_expire_date' => '2026-04-06T10:15:00Z',
         ])));
 
         $client = $this->makeClient($mock);
@@ -310,5 +310,51 @@ final class BogClientTest extends TestCase
 
         $this->expectException(\Bog\Payments\Exception\WebhookVerificationException::class);
         $client->verifyAndParseWebhook('{"event":"order_payment","body":{}}', 'sig');
+    }
+
+    // -------------------------------------------------------------------------
+    // getOrderDetails — BOG returns 400 for unknown orders (not 404)
+    // -------------------------------------------------------------------------
+
+    public function test_get_order_details_maps_400_with_order_id_body_to_order_not_found(): void
+    {
+        // BOG returns HTTP 400 {"message":"Invalid order_id"} for non-existent orders.
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(400, [], '{"message":"Invalid order_id"}'));
+
+        $this->expectException(OrderNotFoundException::class);
+        $this->makeClient($mock)->getOrderDetails('bogus-id');
+    }
+
+    public function test_get_order_details_400_without_order_id_in_body_throws_api_exception(): void
+    {
+        // A 400 that isn't about an unknown order should remain an ApiException.
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(400, [], '{"message":"Bad request"}'));
+
+        try {
+            $this->makeClient($mock)->getOrderDetails('ord-bad');
+            self::fail('Expected ApiException');
+        } catch (ApiException $e) {
+            self::assertSame(400, $e->statusCode);
+        }
+    }
+
+    public function test_get_order_details_non_400_with_order_id_body_throws_api_exception(): void
+    {
+        // Only status 400 should trigger the OrderNotFoundException path.
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(422, [], '{"message":"Invalid order_id"}'));
+
+        try {
+            $this->makeClient($mock)->getOrderDetails('ord-1');
+            self::fail('Expected ApiException');
+        } catch (ApiException $e) {
+            self::assertSame(422, $e->statusCode);
+            self::assertNotInstanceOf(OrderNotFoundException::class, $e);
+        }
     }
 }

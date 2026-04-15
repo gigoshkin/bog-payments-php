@@ -8,7 +8,11 @@ use Bog\Payments\BogClient;
 use Bog\Payments\BogConfig;
 use Bog\Payments\Cache\InMemoryCache;
 use Bog\Payments\Dto\Request\BasketItem;
+use Bog\Payments\Dto\Request\CancelPreAuthRequest;
+use Bog\Payments\Dto\Request\ConfirmPreAuthRequest;
 use Bog\Payments\Dto\Request\CreateOrderRequest;
+use Bog\Payments\Dto\Request\ExternalApplePayConfig;
+use Bog\Payments\Dto\Request\ExternalGooglePayConfig;
 use Bog\Payments\Dto\Request\RefundRequest;
 use Bog\Payments\Dto\Request\SubscribeRequest;
 use Bog\Payments\Exception\ApiException;
@@ -78,11 +82,11 @@ final class BogClientUrlAndBoundaryTest extends TestCase
         $mock = new MockClient();
         $mock->addResponse($this->tokenResponse());
         $mock->addResponse(new Response(200, [], json_encode([
-            'id'             => 'ord-abc',
-            'status'         => 'completed',
-            'purchase_units' => ['currency' => 'GEL', 'requested_amount' => 10.0, 'processed_amount' => 10.0, 'refunded_amount' => 0.0],
-            'created_at'     => '2026-04-06T10:00:00Z',
-            'expires_at'     => '2026-04-06T10:15:00Z',
+            'order_id'          => 'ord-abc',
+            'order_status'      => ['key' => 'completed', 'value' => 'დასრულებული'],
+            'purchase_units'    => ['currency_code' => 'GEL', 'request_amount' => '10.0', 'transfer_amount' => '10.0', 'refund_amount' => '0.0'],
+            'zoned_create_date' => '2026-04-06T10:00:00Z',
+            'zoned_expire_date' => '2026-04-06T10:15:00Z',
         ])));
 
         $this->makeClient($mock)->getOrderDetails('ord-abc');
@@ -186,11 +190,11 @@ final class BogClientUrlAndBoundaryTest extends TestCase
         $mock = new MockClient();
         $mock->addResponse($this->tokenResponse());
         $mock->addResponse(new Response(200, [], json_encode([
-            'id'             => 'ord-200',
-            'status'         => 'completed',
-            'purchase_units' => ['currency' => 'GEL', 'requested_amount' => 10.0, 'processed_amount' => 10.0, 'refunded_amount' => 0.0],
-            'created_at'     => '2026-04-06T10:00:00Z',
-            'expires_at'     => '2026-04-06T10:15:00Z',
+            'order_id'          => 'ord-200',
+            'order_status'      => ['key' => 'completed', 'value' => 'დასრულებული'],
+            'purchase_units'    => ['currency_code' => 'GEL', 'request_amount' => '10.0', 'transfer_amount' => '10.0', 'refund_amount' => '0.0'],
+            'zoned_create_date' => '2026-04-06T10:00:00Z',
+            'zoned_expire_date' => '2026-04-06T10:15:00Z',
         ])));
 
         $details = $this->makeClient($mock)->getOrderDetails('ord-200');
@@ -301,5 +305,219 @@ final class BogClientUrlAndBoundaryTest extends TestCase
             basket:      [new BasketItem('p1', 1, 10.0)],
             ttl:         1441,
         );
+    }
+
+    public function test_confirm_pre_auth_posts_to_correct_url(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(200, [], json_encode([
+            'key' => 'request_received', 'message' => 'ok', 'action_id' => 'act-1',
+        ])));
+
+        $this->makeClient($mock)->confirmPreAuthorization('ord-pre', new ConfirmPreAuthRequest(50.0));
+
+        $url = (string) $mock->getRequests()[1]->getUri();
+        self::assertSame('https://api.bog.ge/payments/v1/payment/authorization/approve/ord-pre', $url);
+    }
+
+    public function test_cancel_pre_auth_posts_to_correct_url(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(200, [], json_encode([
+            'key' => 'request_received', 'message' => 'ok', 'action_id' => 'act-2',
+        ])));
+
+        $this->makeClient($mock)->cancelPreAuthorization('ord-pre', new CancelPreAuthRequest('reason'));
+
+        $url = (string) $mock->getRequests()[1]->getUri();
+        self::assertSame('https://api.bog.ge/payments/v1/payment/authorization/cancel/ord-pre', $url);
+    }
+
+    public function test_save_card_automatic_puts_to_correct_url(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(202, [], ''));
+
+        $this->makeClient($mock)->saveCardAutomatic('ord-sub');
+
+        $req = $mock->getRequests()[1];
+        self::assertSame('PUT', $req->getMethod());
+        self::assertSame('https://api.bog.ge/payments/v1/orders/ord-sub/subscriptions', (string) $req->getUri());
+    }
+
+    public function test_create_recurrent_order_posts_to_parent_url(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(201, [], json_encode([
+            'id'     => 'new-ord',
+            '_links' => ['redirect' => ['href' => 'https://payment.bog.ge/?order_id=new-ord']],
+        ])));
+
+        $result = $this->makeClient($mock)->createRecurrentOrder(
+            'parent-ord',
+            new CreateOrderRequest('https://example.com/cb', 50.0, [new BasketItem('p1', 1, 50.0)]),
+        );
+
+        $url = (string) $mock->getRequests()[1]->getUri();
+        self::assertSame('https://api.bog.ge/payments/v1/ecommerce/orders/parent-ord', $url);
+        self::assertSame('new-ord', $result->orderId);
+    }
+
+    public function test_create_order_with_external_google_pay_includes_config(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(200, [], json_encode([
+            'id'     => 'gp-ord',
+            'status' => 'completed',
+            '_links' => ['details' => ['href' => 'https://api.bog.ge/payments/v1/receipt/gp-ord']],
+        ])));
+
+        $result = $this->makeClient($mock)->createOrder(new CreateOrderRequest(
+            callbackUrl: 'https://example.com/cb',
+            totalAmount: 30.0,
+            basket:      [new BasketItem('p1', 1, 30.0)],
+            googlePay:   new ExternalGooglePayConfig('encrypted-token-xyz'),
+        ));
+
+        $req  = $mock->getRequests()[1];
+        $body = json_decode((string) $req->getBody(), true);
+
+        self::assertSame('https://api.bog.ge/payments/v1/ecommerce/orders', (string) $req->getUri());
+        self::assertTrue($body['config']['google_pay']['external']);
+        self::assertSame('encrypted-token-xyz', $body['config']['google_pay']['google_pay_token']);
+        self::assertSame('gp-ord', $result->orderId);
+        self::assertSame('completed', $result->status);
+        self::assertNull($result->redirectUrl);
+    }
+
+    public function test_create_order_with_external_apple_pay_includes_config(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(201, [], json_encode([
+            'id'     => 'ap-ord',
+            'result' => ['some' => 'data'],
+            '_links' => ['accept' => ['href' => 'https://api.bog.ge/payments/v1/ecommerce/orders/ap-ord/payment']],
+        ])));
+
+        $result = $this->makeClient($mock)->createOrder(new CreateOrderRequest(
+            callbackUrl: 'https://example.com/cb',
+            totalAmount: 30.0,
+            basket:      [new BasketItem('p1', 1, 30.0)],
+            applePay:    new ExternalApplePayConfig(),
+        ));
+
+        $req  = $mock->getRequests()[1];
+        $body = json_decode((string) $req->getBody(), true);
+
+        self::assertTrue($body['config']['apple_pay']['external']);
+        self::assertSame('ap-ord', $result->orderId);
+        self::assertNull($result->redirectUrl);
+        self::assertSame(
+            'https://api.bog.ge/payments/v1/ecommerce/orders/ap-ord/payment',
+            $result->acceptUrl,
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Idempotency key coalesce — confirmPreAuth / cancelPreAuth / saveCardAutomatic
+    //                          / createRecurrentOrder / completeApplePayPayment
+    // -------------------------------------------------------------------------
+
+    public function test_confirm_pre_auth_uses_provided_idempotency_key(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(202, [], json_encode([
+            'key' => 'request_received', 'message' => 'ok', 'action_id' => 'act-c',
+        ])));
+
+        $this->makeClient($mock)->confirmPreAuthorization('ord-pre', new ConfirmPreAuthRequest(50.0), 'confirm-key-xyz');
+
+        self::assertSame('confirm-key-xyz', $mock->getRequests()[1]->getHeaderLine('Idempotency-Key'));
+    }
+
+    public function test_cancel_pre_auth_uses_provided_idempotency_key(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(202, [], json_encode([
+            'key' => 'request_received', 'message' => 'ok', 'action_id' => 'act-x',
+        ])));
+
+        $this->makeClient($mock)->cancelPreAuthorization('ord-pre', new CancelPreAuthRequest(), 'cancel-key-abc');
+
+        self::assertSame('cancel-key-abc', $mock->getRequests()[1]->getHeaderLine('Idempotency-Key'));
+    }
+
+    public function test_save_card_automatic_uses_provided_idempotency_key(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(202, [], ''));
+
+        $this->makeClient($mock)->saveCardAutomatic('ord-sub', 'sub-key-111');
+
+        self::assertSame('sub-key-111', $mock->getRequests()[1]->getHeaderLine('Idempotency-Key'));
+    }
+
+    public function test_create_recurrent_order_uses_provided_idempotency_key(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(201, [], json_encode([
+            'id'     => 'rec-ord',
+            '_links' => ['redirect' => ['href' => 'https://payment.bog.ge/?order_id=rec-ord']],
+        ])));
+
+        $this->makeClient($mock)->createRecurrentOrder(
+            'parent-ord',
+            new CreateOrderRequest('https://example.com/cb', 10.0, [new BasketItem('p1', 1, 10.0)]),
+            'recurrent-key-999',
+        );
+
+        self::assertSame('recurrent-key-999', $mock->getRequests()[1]->getHeaderLine('Idempotency-Key'));
+    }
+
+    public function test_complete_apple_pay_uses_provided_idempotency_key(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(200, [], json_encode([
+            'id'     => 'ap-ord',
+            'status' => 'completed',
+            '_links' => ['details' => ['href' => 'https://api.bog.ge/payments/v1/receipt/ap-ord']],
+        ])));
+
+        $this->makeClient($mock)->completeApplePayPayment('ap-ord', 'apple-token', 'apple-idem-key');
+
+        self::assertSame('apple-idem-key', $mock->getRequests()[1]->getHeaderLine('Idempotency-Key'));
+    }
+
+    public function test_complete_apple_pay_payment_posts_to_correct_url(): void
+    {
+        $mock = new MockClient();
+        $mock->addResponse($this->tokenResponse());
+        $mock->addResponse(new Response(200, [], json_encode([
+            'id'     => 'ap-ord',
+            'status' => 'completed',
+            '_links' => ['details' => ['href' => 'https://api.bog.ge/payments/v1/receipt/ap-ord']],
+        ])));
+
+        $result = $this->makeClient($mock)->completeApplePayPayment('ap-ord', 'apple-token-xyz');
+
+        $req  = $mock->getRequests()[1];
+        $body = json_decode((string) $req->getBody(), true);
+
+        self::assertSame('POST', $req->getMethod());
+        self::assertSame('https://api.bog.ge/payments/v1/ecommerce/orders/ap-ord/payment', (string) $req->getUri());
+        self::assertSame('apple-token-xyz', $body['apple_pay_token']);
+        self::assertSame('ap-ord', $result->orderId);
+        self::assertSame('completed', $result->status);
     }
 }

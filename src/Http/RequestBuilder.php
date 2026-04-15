@@ -11,7 +11,7 @@ use Psr\Http\Message\StreamFactoryInterface;
 /**
  * Builds authenticated PSR-7 requests for the BOG API.
  */
-final class RequestBuilder
+final readonly class RequestBuilder
 {
     public function __construct(
         private readonly RequestFactoryInterface $requestFactory,

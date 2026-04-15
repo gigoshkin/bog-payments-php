@@ -6,6 +6,8 @@ namespace Bog\Payments\Tests\Unit\Dto;
 
 use Bog\Payments\Dto\Request\BasketItem;
 use Bog\Payments\Dto\Request\CreateOrderRequest;
+use Bog\Payments\Dto\Request\ExternalApplePayConfig;
+use Bog\Payments\Dto\Request\ExternalGooglePayConfig;
 use Bog\Payments\Dto\Request\SplitTransfer;
 use Bog\Payments\Enum\CaptureMode;
 use Bog\Payments\Enum\Currency;
@@ -32,7 +34,7 @@ final class CreateOrderRequestTest extends TestCase
         self::assertSame('https://example.com/callback', $data['callback_url']);
         self::assertSame(100.0, $data['purchase_units']['total_amount']);
         self::assertCount(1, $data['purchase_units']['basket']);
-        self::assertSame('GEL', $data['currency']);
+        self::assertSame('GEL', $data['purchase_units']['currency']);
         self::assertSame('automatic', $data['capture']);
     }
 
@@ -47,7 +49,7 @@ final class CreateOrderRequestTest extends TestCase
         $data = $request->toArray();
 
         self::assertArrayNotHasKey('external_order_id', $data);
-        self::assertArrayNotHasKey('redirect_url', $data);
+        self::assertArrayNotHasKey('redirect_urls', $data);
         self::assertArrayNotHasKey('ttl', $data);
         self::assertArrayNotHasKey('payment_method', $data);
     }
@@ -89,18 +91,6 @@ final class CreateOrderRequestTest extends TestCase
         $data = $request->toArray();
         self::assertCount(1, $data['config']['split']['transfers']);
         self::assertSame('GE00000000000000000001', $data['config']['split']['transfers'][0]['iban']);
-    }
-
-    public function test_save_card_flag_serialised(): void
-    {
-        $request = new CreateOrderRequest(
-            callbackUrl: 'https://example.com/callback',
-            totalAmount: 10.0,
-            basket:      $this->makeBasket(),
-            saveCard:    true,
-        );
-
-        self::assertTrue($request->toArray()['config']['save_card']);
     }
 
     public function test_manual_capture_serialised(): void
@@ -159,5 +149,152 @@ final class CreateOrderRequestTest extends TestCase
         ))->toArray();
 
         self::assertArrayNotHasKey('config', $data);
+    }
+
+    public function test_external_google_pay_config_serialised(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl: 'https://example.com/cb',
+            totalAmount: 10.0,
+            basket:      $this->makeBasket(),
+            googlePay:   new ExternalGooglePayConfig('tok-xyz'),
+        ))->toArray();
+
+        self::assertTrue($data['config']['google_pay']['external']);
+        self::assertSame('tok-xyz', $data['config']['google_pay']['google_pay_token']);
+        self::assertArrayNotHasKey('apple_pay', $data['config']);
+    }
+
+    public function test_external_apple_pay_config_serialised(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl: 'https://example.com/cb',
+            totalAmount: 10.0,
+            basket:      $this->makeBasket(),
+            applePay:    new ExternalApplePayConfig(),
+        ))->toArray();
+
+        self::assertTrue($data['config']['apple_pay']['external']);
+        self::assertArrayNotHasKey('google_pay', $data['config']);
+    }
+
+    public function test_external_configs_absent_by_default(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl: 'https://example.com/cb',
+            totalAmount: 10.0,
+            basket:      $this->makeBasket(),
+        ))->toArray();
+
+        self::assertArrayNotHasKey('config', $data);
+    }
+
+    public function test_total_discount_amount_included_when_set(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl:         'https://example.com/cb',
+            totalAmount:         100.0,
+            basket:              $this->makeBasket(),
+            totalDiscountAmount: 10.0,
+        ))->toArray();
+
+        self::assertSame(10.0, $data['purchase_units']['total_discount_amount']);
+    }
+
+    public function test_total_discount_amount_absent_when_null(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl: 'https://example.com/cb',
+            totalAmount: 100.0,
+            basket:      $this->makeBasket(),
+        ))->toArray();
+
+        self::assertArrayNotHasKey('total_discount_amount', $data['purchase_units']);
+    }
+
+    public function test_delivery_amount_included_when_set(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl:    'https://example.com/cb',
+            totalAmount:    100.0,
+            basket:         $this->makeBasket(),
+            deliveryAmount: 5.0,
+        ))->toArray();
+
+        self::assertSame(5.0, $data['purchase_units']['delivery']['amount']);
+    }
+
+    public function test_delivery_amount_absent_when_null(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl: 'https://example.com/cb',
+            totalAmount: 100.0,
+            basket:      $this->makeBasket(),
+        ))->toArray();
+
+        self::assertArrayNotHasKey('delivery', $data['purchase_units']);
+    }
+
+    public function test_application_type_included_when_set(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl:     'https://example.com/cb',
+            totalAmount:     10.0,
+            basket:          $this->makeBasket(),
+            applicationType: 'mobile',
+        ))->toArray();
+
+        self::assertSame('mobile', $data['application_type']);
+    }
+
+    public function test_application_type_absent_when_null(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl: 'https://example.com/cb',
+            totalAmount: 10.0,
+            basket:      $this->makeBasket(),
+        ))->toArray();
+
+        self::assertArrayNotHasKey('application_type', $data);
+    }
+
+    public function test_only_redirect_url_sets_success_key(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl: 'https://example.com/cb',
+            totalAmount: 10.0,
+            basket:      $this->makeBasket(),
+            redirectUrl: 'https://example.com/success',
+        ))->toArray();
+
+        self::assertSame('https://example.com/success', $data['redirect_urls']['success']);
+        self::assertArrayNotHasKey('fail', $data['redirect_urls']);
+    }
+
+    public function test_only_fail_url_sets_fail_key(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl: 'https://example.com/cb',
+            totalAmount: 10.0,
+            basket:      $this->makeBasket(),
+            failUrl:     'https://example.com/fail',
+        ))->toArray();
+
+        self::assertSame('https://example.com/fail', $data['redirect_urls']['fail']);
+        self::assertArrayNotHasKey('success', $data['redirect_urls']);
+    }
+
+    public function test_both_redirect_urls_set(): void
+    {
+        $data = (new CreateOrderRequest(
+            callbackUrl: 'https://example.com/cb',
+            totalAmount: 10.0,
+            basket:      $this->makeBasket(),
+            redirectUrl: 'https://example.com/success',
+            failUrl:     'https://example.com/fail',
+        ))->toArray();
+
+        self::assertSame('https://example.com/success', $data['redirect_urls']['success']);
+        self::assertSame('https://example.com/fail', $data['redirect_urls']['fail']);
     }
 }
