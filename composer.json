@@ -2,7 +2,15 @@
     "name": "gigoshkin/bog-payments-php",
     "description": "Bank of Georgia Payments API client library for PHP 8.2+",
     "type": "library",
+    "keywords": ["bog", "bank-of-georgia", "payments", "psr-18", "ecommerce", "ipay"],
+    "homepage": "https://github.com/gigoshkin/bog-payments-php",
     "license": "MIT",
+    "authors": [
+        {
+            "name": "Giorgi Kiknadze",
+            "role": "Developer"
+        }
+    ],
     "require": {
         "php": "^8.2",
         "ext-openssl": "*",
