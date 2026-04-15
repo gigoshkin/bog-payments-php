@@ -35,12 +35,12 @@ use Psr\Http\Message\StreamFactoryInterface;
 final readonly class BogClient
 {
     public function __construct(
-        private readonly BogConfig               $config,
-        private readonly TokenProviderInterface  $tokenProvider,
-        private readonly ClientInterface         $httpClient,
-        private readonly RequestBuilder          $requestBuilder,
-        private readonly IdempotencyKeyGenerator $idempotencyKeyGen,
-        private readonly ?WebhookVerifier        $webhookVerifier = null,
+        private BogConfig               $config,
+        private TokenProviderInterface  $tokenProvider,
+        private ClientInterface         $httpClient,
+        private RequestBuilder          $requestBuilder,
+        private IdempotencyKeyGenerator $idempotencyKeyGen,
+        private ?WebhookVerifier        $webhookVerifier = null,
     ) {}
 
     // -------------------------------------------------------------------------

@@ -14,8 +14,8 @@ use Psr\Http\Message\StreamFactoryInterface;
 final readonly class RequestBuilder
 {
     public function __construct(
-        private readonly RequestFactoryInterface $requestFactory,
-        private readonly StreamFactoryInterface  $streamFactory,
+        private RequestFactoryInterface $requestFactory,
+        private StreamFactoryInterface  $streamFactory,
     ) {}
 
     /**

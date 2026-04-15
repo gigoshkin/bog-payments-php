@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bog\Payments\Dto\Response;
 
-use Bog\Payments\Enum\OrderStatus;
 
 final readonly class WebhookPayload
 {

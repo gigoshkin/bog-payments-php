@@ -35,9 +35,13 @@ final readonly class CreateOrderResponse
             throw new \InvalidArgumentException('CreateOrderResponse: missing required field "id".');
         }
 
-        $redirectUrl = isset($data['_links']['redirect']['href'])
-            ? (string) $data['_links']['redirect']['href']
-            : (isset($data['redirect_url']) ? (string) $data['redirect_url'] : null);
+        if (isset($data['_links']['redirect']['href'])) {
+            $redirectUrl = (string) $data['_links']['redirect']['href'];
+        } elseif (isset($data['redirect_url'])) {
+            $redirectUrl = (string) $data['redirect_url'];
+        } else {
+            $redirectUrl = null;
+        }
 
         $acceptUrl  = isset($data['_links']['accept']['href'])
             ? (string) $data['_links']['accept']['href']

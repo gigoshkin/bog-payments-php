@@ -15,10 +15,10 @@ use Psr\Http\Message\StreamFactoryInterface;
 final readonly class OAuthTokenProvider implements TokenProviderInterface, TokenFetcherInterface
 {
     public function __construct(
-        private readonly BogConfig              $config,
-        private readonly ClientInterface        $httpClient,
-        private readonly RequestFactoryInterface $requestFactory,
-        private readonly StreamFactoryInterface  $streamFactory,
+        private BogConfig              $config,
+        private ClientInterface        $httpClient,
+        private RequestFactoryInterface $requestFactory,
+        private StreamFactoryInterface  $streamFactory,
     ) {}
 
     public function getToken(): string
