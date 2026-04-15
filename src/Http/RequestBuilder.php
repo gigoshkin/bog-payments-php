@@ -26,7 +26,7 @@ final readonly class RequestBuilder
     public function json(
         string  $method,
         string  $url,
-        string  $token,
+        #[\SensitiveParameter] string  $token,
         array   $body = [],
         ?string $idempotencyKey = null,
     ): RequestInterface {
@@ -55,7 +55,7 @@ final readonly class RequestBuilder
     /**
      * Build a request with no body (GET, DELETE).
      */
-    public function plain(string $method, string $url, string $token, ?string $idempotencyKey = null): RequestInterface
+    public function plain(string $method, string $url, #[\SensitiveParameter] string $token, ?string $idempotencyKey = null): RequestInterface
     {
         $upper   = strtoupper($method); // @infection-ignore-all
         $request = $this->requestFactory

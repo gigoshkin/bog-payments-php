@@ -21,7 +21,7 @@ final readonly class ExternalGooglePayConfig
      *                               modify or truncate.
      */
     public function __construct(
-        public string $googlePayToken,
+        #[\SensitiveParameter] public string $googlePayToken,
     ) {}
 
     /** @return array<string, mixed> */
